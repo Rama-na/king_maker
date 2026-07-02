@@ -1,0 +1,48 @@
+# Swing Research configuration — single source of truth for strategy parameters.
+# Everything here is read once at startup (see src/swing/config.py).
+
+universe:
+  # "nse_fno": stock-derivative symbols from the latest FO bhavcopy (liquid, no hard circuits)
+  # "static": use static_list below
+  source: nse_fno
+  static_list: []
+  # Liquidity floor applied on top of the universe (median daily traded value, in ₹ crore)
+  min_median_traded_value_cr: 5.0
+
+swing:
+  # ATR-adaptive swing definition. These three numbers define BOTH the trade
+  # and the ML training label (triple-barrier) — they are the same object.
+  atr_period: 14
+  stop_atr_mult: 2.0      # stop distance = 2 x ATR(14)
+  target_r_mult: 2.0      # target distance = 2 x stop distance (2R)
+  horizon_days: 10        # vertical barrier, trading days
+
+risk:
+  capital: 1000000        # ₹ — set to your actual research capital
+  risk_pct_per_trade: 1.0 # % of capital risked between entry and stop
+  max_positions: 5
+
+shortlist:
+  size: 10                # max ideas per day reaching the reasoning panel
+
+costs:
+  # Indian delivery-trade frictions. Rates carry effective dates so backtests
+  # apply the rate that was in force on each trade date.
+  # NOTE: verify current STT/charges before trusting backtest output (spec §7).
+  stt:                      # Securities Transaction Tax, % of turnover, each side (delivery)
+    - { effective: 2004-10-01, buy_pct: 0.100, sell_pct: 0.100 }
+    - { effective: 2026-04-01, buy_pct: 0.125, sell_pct: 0.125 }  # placeholder — confirm post-Apr-2026 rate
+  exchange_txn_pct: 0.00297   # NSE transaction charge, % of turnover, each side
+  sebi_fee_pct: 0.0001        # % of turnover, each side
+  stamp_duty_buy_pct: 0.015   # % on buy side only
+  gst_pct: 18.0               # on (brokerage + exchange txn + sebi fee)
+  brokerage_per_order: 0.0    # discount brokers: zero for delivery
+  dp_charge_per_sell: 15.93   # ₹ flat per sell instruction (CDSL via discount broker)
+  slippage_bps: 5.0           # base slippage assumption, basis points each side
+
+data:
+  dir: data                  # override with SWING_DATA_DIR env var
+  backfill_years: 6
+  # polite NSE client settings
+  request_gap_seconds: 1.0
+  max_retries: 4

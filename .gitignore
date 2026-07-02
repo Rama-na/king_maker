@@ -1,0 +1,21 @@
+# local data — never commit market data, caches, or results
+data/
+
+# secrets
+.env
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# notebooks / scratch
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
