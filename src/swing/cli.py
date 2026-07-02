@@ -103,17 +103,81 @@ def status():
 
 
 @app.command()
-def run(day: str = typer.Option(None, "--date")):
-    """Nightly research run (Phase 1)."""
-    console.print("[yellow]Not built yet — arrives in Phase 1 (rules + backtest).[/yellow]")
-    raise typer.Exit(2)
+def run(day: str = typer.Option(None, "--date", help="YYYY-MM-DD (default: today)")):
+    """Nightly research run: ingest → features → screen → size → HTML report."""
+    from datetime import timedelta
+
+    from .decision.sizing import size_position
+    from .features.engine import compute_features
+    from .pipeline.ingest import load_universe
+    from .screener.rules import screen
+
+    cfg, store, ingestor = _make_ingestor()
+    d = date.fromisoformat(day) if day else date.today()
+
+    status = ingestor.ingest_day(d)
+    if status == "holiday":
+        console.print(f"[yellow]{d} is not a trading day — nothing to do.[/yellow]")
+        raise typer.Exit(0)
+    ingestor.refresh_corporate_actions(d - timedelta(days=30), d)
+
+    symbols = load_universe(store, as_of=d)
+    if not symbols:
+        console.print("Universe snapshot missing — fetching…")
+        symbols = ingestor.snapshot_universe(d)
+
+    console.print(f"Computing features for {len(symbols)} symbols as of {d}…")
+    features, regime = compute_features(store, symbols, d, atr_period=cfg.swing.atr_period)
+    ideas = screen(features, regime, cfg, d)
+
+    sizes = {}
+    for idea in ideas:
+        ref_entry = sum(idea.entry_zone) / 2
+        sizes[idea.symbol] = size_position(
+            ref_entry, idea.stop, cfg.risk.capital, cfg.risk.risk_pct_per_trade
+        )
+
+    from .features.engine import LOOKBACK_CALENDAR_DAYS
+    from .report.daily import render_report
+
+    bars = {}
+    if ideas:
+        window = store.get_ohlcv(
+            d - timedelta(days=LOOKBACK_CALENDAR_DAYS), d, as_of=d,
+            symbols=[i.symbol for i in ideas],
+        )
+        bars = {s: g.sort_values("trade_date") for s, g in window.groupby("symbol")}
+
+    out = cfg.data.data_dir / "reports" / f"{d}.html"
+    render_report(d, ideas, sizes, regime, bars, out)
+    console.print(f"[green]{len(ideas)} idea(s).[/green] Report: {out}")
 
 
 @app.command()
-def backtest():
-    """Historical backtest with Indian cost model (Phase 1)."""
-    console.print("[yellow]Not built yet — arrives in Phase 1 (rules + backtest).[/yellow]")
-    raise typer.Exit(2)
+def backtest(
+    start: str = typer.Argument(..., help="YYYY-MM-DD"),
+    end: str = typer.Argument(..., help="YYYY-MM-DD"),
+):
+    """Historical rules-only backtest with the Indian cost model."""
+    from .backtest.engine import Backtester
+    from .pipeline.ingest import load_universe
+
+    cfg, store, _ = _make_ingestor()
+    start_d, end_d = date.fromisoformat(start), date.fromisoformat(end)
+    universe = load_universe(store, as_of=end_d)
+    if not universe:
+        console.print("[red]No universe snapshot — run `swing backfill` first.[/red]")
+        raise typer.Exit(1)
+
+    result = Backtester(store, cfg).run(universe, start_d, end_d)
+    console.print_json(json.dumps(result.metrics, default=str))
+
+    out_dir = cfg.data.data_dir / "backtests"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tag = f"{start}_{end}"
+    result.trades.to_csv(out_dir / f"trades_{tag}.csv", index=False)
+    result.equity.to_csv(out_dir / f"equity_{tag}.csv", index=False)
+    console.print(f"Trades + equity curves written to {out_dir}")
 
 
 if __name__ == "__main__":

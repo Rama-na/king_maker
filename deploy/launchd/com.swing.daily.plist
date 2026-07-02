@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly research run on the Mac mini.
+  Install:
+    1. Edit the two REPLACE_ME paths below.
+    2. cp deploy/launchd/com.swing.daily.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.swing.daily.plist
+  19:15 local time assumes the mini runs on IST; NSE archives are published
+  by ~19:00 IST. If the machine is in another timezone, convert accordingly.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.swing.daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd REPLACE_ME_REPO_PATH && uv run swing run 2>&1 | tee -a data/logs/daily.log; osascript -e 'display notification "Swing research run finished" with title "swing"'</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>19</integer>
+    <key>Minute</key><integer>15</integer>
+  </dict>
+  <key>StandardErrorPath</key><string>REPLACE_ME_REPO_PATH/data/logs/launchd.err.log</string>
+  <key>StandardOutPath</key><string>REPLACE_ME_REPO_PATH/data/logs/launchd.out.log</string>
+</dict>
+</plist>

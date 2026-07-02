@@ -20,7 +20,7 @@ Every trading day after market close it will:
 | Phase | Contents | State |
 |---|---|---|
 | 0 | Scaffold, NSE adapters, corporate-action adjustment, point-in-time store, backfill | **built** (live NSE verification pending — see below) |
-| 1 | Feature engine, triple-barrier labels, rules screener, Indian-cost backtester, daily report | not started |
+| 1 | Feature engine, triple-barrier labels, rules screener, Indian-cost backtester, daily report | **built** (≥5y real-data backtest pending, needs backfill) |
 | 2 | LightGBM scorer + purged walk-forward CV | not started |
 | 3 | LLM reasoning panel (Anthropic API, tiered) | not started |
 | 4 | Outcome memory, web dashboard, launchd automation | not started |
@@ -37,7 +37,21 @@ uv run pytest                 # all green before touching data
 uv run swing backfill --years 6    # ~1.5k trading days; resumable, throttled (~1 req/s)
 uv run swing status
 uv run swing validate 2020-07-01 2026-06-30
+
+uv run swing backtest 2021-07-01 2026-06-30   # rules-only baseline, after-cost metrics
+uv run swing run                              # tonight's ideas → data/reports/<date>.html
 ```
+
+Automate the nightly run with `deploy/launchd/com.swing.daily.plist` (instructions
+inside the file).
+
+### Trade convention (the label IS the trade)
+
+Signal on close of day T → entry at the open of T+1 → stop `2×ATR(14)` below entry →
+target `2R` above → time exit 10 trading days after entry. Ambiguous bars resolve to
+the stop; gaps fill at the open. The triple-barrier labeler (`src/swing/labeling/`)
+and the backtester (`src/swing/backtest/`) implement the identical convention, so
+Phase-2 training labels mean exactly what the backtest measures.
 
 > **Note:** the NSE adapters were built against recorded payload formats in a
 > sandboxed environment without NSE network access. The first `swing backfill`
